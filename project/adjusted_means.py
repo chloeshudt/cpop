@@ -299,6 +299,6 @@ def analyze_timepoint(df, timepoint, cytokines):
     print(f"\nSignificant associations saved to PDF: {pdf_path}")
 
 if __name__ == "__main__":
-    df = pd.read_excel("simulated_50_subjects.xlsx")
+    df = pd.read_excel("data/simulated_50_subjects.xlsx")
     cytokines_to_test = ["il_10_pg_ml", "il_17a_pg_ml", "il_1b_pg_ml"]
     analyze_timepoint(df, "baseline", cytokines_to_test)
