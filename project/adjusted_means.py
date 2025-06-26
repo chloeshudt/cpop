@@ -1,4 +1,5 @@
 import os
+import utils
 import pandas as pd
 import numpy as np
 import statsmodels.formula.api as smf
@@ -10,28 +11,6 @@ import traceback
 from itertools import combinations
 from patsy import dmatrix
 from pandas.api.types import CategoricalDtype
-
-def clean_and_filter_data(df, timepoint):
-    df.columns = (
-        df.columns.str.strip()
-        .str.lower()
-        .str.replace(r"[ /()-]", "_", regex=True)
-        .str.replace(r"__+", "_", regex=True)
-        .str.strip("_")
-    )
-
-    df = df[df["timepoint"].str.lower() == timepoint.lower()].copy()
-
-    if "widespread_pain" in df.columns and df["widespread_pain"].dtype == object:
-        df["widespread_pain"] = df["widespread_pain"].map({"Yes": 1, "No": 0})
-
-    for cat_var in ["gender", "race_ethnicity", "glycemic_group"]:
-        if cat_var in df.columns:
-            df[cat_var] = df[cat_var].astype("category")
-
-    return df
-
-
 from patsy import dmatrix
 from pandas.api.types import CategoricalDtype
 
@@ -87,102 +66,6 @@ def get_adjusted_means(model, df, predictor):
         })
 
     return results
-
-
-
-def run_regression_model(df, cytokine_variable):
-    if df.empty:
-        print(f"Skipping {cytokine_variable}: no data available after filtering.")
-        return None
-
-    predictors = ["widespread_pain", "age"]
-    for cat_var in ["gender", "race_ethnicity", "glycemic_group"]:
-        if cat_var in df.columns and df[cat_var].nunique() > 1:
-            predictors.append(cat_var)
-
-    interaction_terms = [f"{a}:{b}" for a, b in combinations(predictors, 2)]
-    formula = f"{cytokine_variable} ~ " + " + ".join(predictors + interaction_terms)
-
-    try:
-        print(f"\nRunning model for: {cytokine_variable}")
-        model = smf.ols(formula=formula, data=df, missing="drop").fit()
-        print(model.summary())
-
-        summary_df = pd.DataFrame({
-            "Variable": model.params.index,
-            "Coefficient": model.params.values,
-            "P-value": model.pvalues.values
-        })
-
-        significant = summary_df[
-            (summary_df["P-value"] < 0.05) & (summary_df["Variable"] != "Intercept")
-        ]
-
-        adjusted_means_info = {}
-        for var in significant["Variable"]:
-            if ":" in var:  # skip interaction terms for now
-                continue
-            base_var = var.split("[")[0]
-            means = get_adjusted_means(model, df, base_var)
-            if means:
-                adjusted_means_info[base_var] = means
-
-        return {
-            "significant": significant,
-            "adjusted_means": adjusted_means_info
-        }
-
-    except Exception as e:
-        print(f"Error fitting model for {cytokine_variable}: {e}")
-        traceback.print_exc()
-        return None
-
-
-def run_regression_model(df, cytokine_variable):
-    if df.empty:
-        print(f"Skipping {cytokine_variable}: no data available after filtering.")
-        return None
-
-    predictors = ["widespread_pain", "age"]
-    for cat_var in ["gender", "race_ethnicity", "glycemic_group"]:
-        if cat_var in df.columns and df[cat_var].nunique() > 1:
-            predictors.append(cat_var)
-
-    interaction_terms = [f"{a}:{b}" for a, b in combinations(predictors, 2)]
-    formula = f"{cytokine_variable} ~ " + " + ".join(predictors + interaction_terms)
-
-    try:
-        model = smf.ols(formula=formula, data=df, missing="drop").fit()
-
-        summary_df = pd.DataFrame({
-            "Variable": model.params.index,
-            "Coefficient": model.params.values,
-            "P-value": model.pvalues.values
-        })
-
-        adjusted_means_info = {}
-        for predictor in predictors:
-            if predictor in df.columns and (
-                isinstance(df[predictor].dtype, CategoricalDtype) or 
-                df[predictor].dtype == object or 
-                (df[predictor].dropna().nunique() == 2 and np.issubdtype(df[predictor].dtype, np.number))
-            ):
-                means = get_adjusted_means(model, df, predictor)
-                if means:
-                    adjusted_means_info[predictor] = means
-
-        return {
-            "significant": summary_df[
-                (summary_df["P-value"] < 0.05) & (summary_df["Variable"] != "Intercept")
-            ],
-            "adjusted_means": adjusted_means_info
-        }
-
-    except Exception as e:
-        print(f"Error fitting model for {cytokine_variable}: {e}")
-        traceback.print_exc()
-        return None
-
 
 def save_significant_to_pdf(results_dict, pdf_filename):
     styles = getSampleStyleSheet()
@@ -280,25 +163,75 @@ def save_significant_to_pdf(results_dict, pdf_filename):
 
     doc.build(elements)
 
+def run_regression_model(df, cytokine_variable):
 
+    predictors = ["widespread_pain", "age"]
+    for cat_var in ["gender", "race_ethnicity", "glycemic_group"]:
+        if cat_var in df.columns and df[cat_var].nunique() > 1:
+            predictors.append(cat_var)
+
+    interaction_terms = [f"{a}:{b}" for a, b in combinations(predictors, 2)]
+    formula = f"{cytokine_variable} ~ " + " + ".join(predictors + interaction_terms)
+
+    try:
+        model = smf.ols(formula=formula, data=df, missing="drop").fit()
+
+        summary_df = pd.DataFrame({
+            "Variable": model.params.index,
+            "Coefficient": model.params.values,
+            "P-value": model.pvalues.values
+        })
+
+        adjusted_means_info = {}
+        for predictor in predictors:
+            if predictor in df.columns and (
+                isinstance(df[predictor].dtype, CategoricalDtype) or 
+                df[predictor].dtype == object or 
+                (df[predictor].dropna().nunique() == 2 and np.issubdtype(df[predictor].dtype, np.number))
+            ):
+                means = get_adjusted_means(model, df, predictor)
+                if means:
+                    adjusted_means_info[predictor] = means
+
+        return {
+            "significant": summary_df[
+                (summary_df["P-value"] < 0.05) & (summary_df["Variable"] != "Intercept")
+            ],
+            "adjusted_means": adjusted_means_info
+        }
+
+    except Exception as e:
+        print(f"Error fitting model for {cytokine_variable}: {e}")
+        traceback.print_exc()
+        return None
 
 def analyze_timepoint(df, timepoint, cytokines):
-    filtered_df = clean_and_filter_data(df, timepoint)
+    # filters data to specific timepoint
+    filtered_df = df[df["timepoint"].str.lower() == timepoint.lower()].copy()
+    
     all_significant = {}
 
+    # run regression model for each cytokine and save significant 
     for cytokine in cytokines:
-        if cytokine in filtered_df.columns:
-            sig_df = run_regression_model(filtered_df, cytokine)
-            all_significant[cytokine] = sig_df
-        else:
-            print(f"{cytokine} not found in dataset.")
-            all_significant[cytokine] = None
+        sig_df = run_regression_model(filtered_df, cytokine)
+        all_significant[cytokine] = sig_df
 
     pdf_path = os.path.join(os.getcwd(), "significant_associations.pdf")
+    
     save_significant_to_pdf(all_significant, pdf_path)
     print(f"\nSignificant associations saved to PDF: {pdf_path}")
 
+
 if __name__ == "__main__":
-    df = pd.read_excel("data/simulated_50_subjects.xlsx")
-    cytokines_to_test = ["il_10_pg_ml", "il_17a_pg_ml", "il_1b_pg_ml"]
-    analyze_timepoint(df, "baseline", cytokines_to_test)
+    # load and clean patient data
+    raw_df = pd.read_excel("data/simulated_50_subjects.xlsx")
+    clean_df = utils.clean_data(raw_df)
+
+    # run single-timepoint analyses #####################################################
+    # defining our dependent variables of interest
+    cytokines_to_test = ["il_10_pg_ml", "il_17a_pg_ml"]
+    timepoints_to_test = ["baseline"]
+
+    # run single timepoint analyses
+    for timepoint in timepoints_to_test:
+        analyze_timepoint(clean_df, timepoint, cytokines_to_test)
