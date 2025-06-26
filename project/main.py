@@ -2,13 +2,16 @@ import pandas as pd
 
 def analyze_timepoint(df, timepoint, cytokines):
     print(f"testing analyze timepoint: {timepoint}")
-    # run regression model for each cytokine by calling run_regression()
+    # TODO: filter df for timepoint
 
-    # TODO research what stats tools to use for your model. 
+    all_results = {}
+    # TODO: run the model for each cytokine using run_regression_model(). Assign output to dictionary.
 
+    # TODO: output all_results to PDF called f"{timepoint}_all_results.pdf" 
     return 
 
-def run_regression():
+def run_regression_model():
+    # TODO: use this function to run the model and return the results
     return
 
 def clean_data(df):
@@ -24,11 +27,9 @@ if __name__ == "__main__":
 
     # define which cytokines and timepoints to analyze
     cytokines_to_test = ["il_10_pg_ml", "il_17a_pg_ml"]
-    timepoints_to_test = ["baseline", "3mo"]
 
     # run single timepoint analyses
-    for timepoint in timepoints_to_test:
-        analyze_timepoint(clean_df, timepoint, cytokines_to_test)
+    analyze_timepoint(clean_df, "baseline", cytokines_to_test)
 
     # output all-analyses report
     # output significant association report

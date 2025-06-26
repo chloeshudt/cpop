@@ -175,7 +175,7 @@ def run_regression_model(df, cytokine_variable):
     try:
         # TODO: CONFIRM MODEL APPROACH
         model = smf.ols(formula=formula, data=df, missing="drop").fit()
-
+        print(model)
         summary_df = pd.DataFrame({
             "Variable": model.params.index,
             "Coefficient": model.params.values,
@@ -216,7 +216,7 @@ def analyze_timepoint(df, timepoint, cytokines):
         sig_df = run_regression_model(filtered_df, cytokine)
         all_significant[cytokine] = sig_df
 
-    pdf_path = os.path.join(os.getcwd(), "significant_associations.pdf")
+    pdf_path = os.path.join(os.getcwd(), "output/significant_associations.pdf")
     
     save_significant_to_pdf(all_significant, pdf_path)
     print(f"\nSignificant associations saved to PDF: {pdf_path}")
