@@ -1,5 +1,4 @@
 import os
-import utils
 import pandas as pd
 import numpy as np
 import statsmodels.formula.api as smf
@@ -18,10 +17,8 @@ def get_adjusted_means(model, df, predictor):
     """
     Calculate adjusted means and standard errors for each category of a categorical predictor.
     """
-    if predictor not in df.columns:
-        return None
-
     # Check if the variable is categorical or binary numeric
+    # TODO: is categorical specifically 3+ options?
     is_cat = isinstance(df[predictor].dtype, CategoricalDtype) or df[predictor].dtype == object
 
     try:
@@ -165,15 +162,18 @@ def save_significant_to_pdf(results_dict, pdf_filename):
 
 def run_regression_model(df, cytokine_variable):
 
-    predictors = ["widespread_pain", "age"]
-    for cat_var in ["gender", "race_ethnicity", "glycemic_group"]:
-        if cat_var in df.columns and df[cat_var].nunique() > 1:
-            predictors.append(cat_var)
+    # define independent vars of interest
+    predictors = ["age", "gender", "race_ethnicity", "glycemic_group", "widespread_pain"]
 
-    interaction_terms = [f"{a}:{b}" for a, b in combinations(predictors, 2)]
+    combos = combinations(predictors, 2)
+
+    interaction_terms = [f"{a}:{b}" for a, b in combos]
+
     formula = f"{cytokine_variable} ~ " + " + ".join(predictors + interaction_terms)
 
+    # TODO: look up what it means for the model to 'fail'
     try:
+        # TODO: CONFIRM MODEL APPROACH
         model = smf.ols(formula=formula, data=df, missing="drop").fit()
 
         summary_df = pd.DataFrame({
@@ -184,7 +184,7 @@ def run_regression_model(df, cytokine_variable):
 
         adjusted_means_info = {}
         for predictor in predictors:
-            if predictor in df.columns and (
+            if (
                 isinstance(df[predictor].dtype, CategoricalDtype) or 
                 df[predictor].dtype == object or 
                 (df[predictor].dropna().nunique() == 2 and np.issubdtype(df[predictor].dtype, np.number))
@@ -221,11 +221,16 @@ def analyze_timepoint(df, timepoint, cytokines):
     save_significant_to_pdf(all_significant, pdf_path)
     print(f"\nSignificant associations saved to PDF: {pdf_path}")
 
+def clean_data(df):
+    # ensure all columns and data are snakecase
+    df.columns = df.columns.str.lower()
+    df = df.map(lambda x: x.lower().replace("-", "_") if isinstance(x, str) else x)
+    return(df)
 
 if __name__ == "__main__":
     # load and clean patient data
     raw_df = pd.read_excel("data/simulated_50_subjects.xlsx")
-    clean_df = utils.clean_data(raw_df)
+    clean_df = clean_data(raw_df)
 
     # run single-timepoint analyses #####################################################
     # defining our dependent variables of interest
